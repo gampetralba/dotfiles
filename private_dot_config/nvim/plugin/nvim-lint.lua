@@ -19,5 +19,5 @@ vim.api.nvim_create_augroup(group, {clear = true});
 
 vim.api.nvim_create_autocmd({'BufWritePost', 'BufEnter', 'BufLeave'}, {
     group = group,
-    callback = function() lint.try_lint(nil, {ignore_errors = true}) end
+    callback = function() lint.try_lint() end
 })
