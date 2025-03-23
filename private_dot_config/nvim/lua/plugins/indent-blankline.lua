@@ -3,5 +3,5 @@ return {
     main = "ibl",
     ---@module "ibl"
     ---@type ibl.config
-    opts = {indent = {char = '⦙'}, exclude = {filetypes = {'startify'}}}
+    opts = {indent = {char = '⦙'}, exclude = {filetypes = {'dashboard'}}}
 }
