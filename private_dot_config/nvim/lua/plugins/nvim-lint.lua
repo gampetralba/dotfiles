@@ -12,7 +12,6 @@ return {
                 typescriptreact = {"eslint"},
                 lua = {"luacheck"},
                 ruby = {"rubocop"},
-                markdown = {"markdownlint"},
                 css = {"stylelint"},
                 scss = {"stylelint"}
             }
