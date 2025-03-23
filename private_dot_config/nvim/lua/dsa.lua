@@ -60,4 +60,8 @@ M.run_cpp_program = function()
         .nvim_buf_set_lines(output_buf, 0, -1, false, vim.split(output, "\n"))
 end
 
+-- Define user commands
+vim.api.nvim_create_user_command("OpenTestBuffer", dsa.open_test_buffer, {})
+vim.api.nvim_create_user_command("RunCpp", dsa.run_cpp_program, {})
+
 return M
