@@ -19,16 +19,12 @@ return {
                         group = 'Label',
                         action = 'Telescope find_files',
                         key = 'f'
-                    }, {
-                        desc = ' Apps',
+                    },
+                    {
+                        desc = ' New file',
                         group = 'DiagnosticHint',
-                        action = 'Telescope app',
-                        key = 'a'
-                    }, {
-                        desc = ' dotfiles',
-                        group = 'Number',
-                        action = 'Telescope dotfiles',
-                        key = 'd'
+                        action = 'enew',
+                        key = 'e'
                     }
                 }
             }
