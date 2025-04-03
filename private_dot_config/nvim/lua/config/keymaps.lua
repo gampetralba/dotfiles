@@ -57,6 +57,5 @@ vim.keymap
 vim.keymap.set("n", "<leader>hv", ":vert help ", {noremap = true})
 
 -- Diagnostic
-vim.api.nvim_set_keymap("n", "<leader>dq",
-                        "<cmd>lua vim.diagnostic.setqflist()<CR>",
-                        {noremap = true})
+vim.keymap.set("n", "<leader>dq", "<cmd>lua vim.diagnostic.setqflist()<CR>",
+               {noremap = true})
