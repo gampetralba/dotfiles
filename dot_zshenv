@@ -3,3 +3,4 @@ export PATH=~/nvim-linux-x86_64/bin:$PATH
 export PATH=~/lua-language-server-3.13.6-linux-x64/bin:$PATH
 export PATH=~/.local/bin:$PATH
 export PATH=~/uncrustify-uncrustify-0.80.1/build:$PATH
+. "$HOME/.cargo/env"
