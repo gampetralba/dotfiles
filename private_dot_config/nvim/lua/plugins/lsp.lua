@@ -33,8 +33,8 @@ return {
 
             -- LuaFormatter off
             vim.api.nvim_set_keymap('n', '<space>e', '<cmd>lua vim.diagnostic.open_float()<CR>', opts)
-            vim.api.nvim_set_keymap('n', '[g', '<cmd>lua vim.diagnostic.goto_prev()<CR>', opts)
-            vim.api.nvim_set_keymap('n', ']g', '<cmd>lua vim.diagnostic.goto_next()<CR>', opts)
+            vim.api.nvim_set_keymap('n', '[g', '<cmd>lua vim.diagnostic.jump({ count = -1, float = true })<CR>', opts)
+            vim.api.nvim_set_keymap('n', ']g', '<cmd>lua vim.diagnostic.jump({ count = 1, float = true })<CR>', opts)
             vim.api.nvim_set_keymap('n', '<space>q', '<cmd>lua vim.diagnostic.setloclist()<CR>', opts)
             -- LuaFormatter on
 
