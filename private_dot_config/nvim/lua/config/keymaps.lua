@@ -12,11 +12,10 @@ vim.keymap.set("n", "<leader>ws", "<C-w>s", {noremap = true, silent = true})
 vim.keymap.set("n", "<leader>wv", "<C-w>v", {noremap = true, silent = true})
 
 -- Tabs
-vim.keymap.set("n", "tn", ":tabnew<Space>", {noremap = true})
+vim.keymap.set("n", "tn", ":tabnew %:h/", {noremap = true})
 vim.keymap.set("n", "tk", ":tabnext<CR>", {noremap = true, silent = true})
 vim.keymap.set("n", "tj", ":tabprev<CR>", {noremap = true, silent = true})
 vim.keymap.set("n", "tp", ":tabclose<CR>", {noremap = true, silent = true})
-vim.keymap.set("n", "gw", ":Window<CR>", {noremap = true, silent = true})
 
 for i = 1, 9 do
     vim.keymap.set("n", "<leader>" .. i, i .. "gt",
