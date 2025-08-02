@@ -2,7 +2,7 @@ return {
     'phaazon/hop.nvim',
     config = true,
     keys = {
-        {'F', "<cmd>lua require'hop'.hint_words()<cr>", {mode = {"n", "v"}}},
-        {'f', "<cmd>lua require'hop'.hint_char1()<cr>", {mode = {"n", "v"}}}
+        {'F', "<cmd>HopWord<cr>", mode = {"n", "v", "o"}},
+        {'f', "<cmd>HopChar1<cr>", mode = {"n", "v", "o"}}
     }
 }
