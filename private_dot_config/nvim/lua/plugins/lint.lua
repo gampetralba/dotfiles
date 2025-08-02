@@ -1,6 +1,7 @@
 return {
     {
         "mfussenegger/nvim-lint",
+        dependencies = {"mason.nvim"},
         config = function()
             local lint = require("lint")
 
@@ -23,6 +24,16 @@ return {
                 {group = group, callback = function()
                     lint.try_lint()
                 end})
+        end
+    }, {
+        "rshkarin/mason-nvim-lint",
+        dependencies = {"mason.nvim", "mfussenegger/nvim-lint"},
+        config = function()
+            require("mason-nvim-lint").setup({
+                ensure_installed = {"eslint_d", "luacheck"},
+                automatic_installation = true,
+                quiet_mode = true
+            })
         end
     }
 }

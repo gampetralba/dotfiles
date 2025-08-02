@@ -94,7 +94,7 @@ return {
 
             -- LSP capabilities with completion support
             local capabilities = require("cmp_nvim_lsp").default_capabilities()
-            
+
             -- Set completion options
             vim.opt.completeopt = {"menu", "menuone", "noselect"}
 
@@ -137,7 +137,7 @@ return {
         end
     }, {
         "mason-org/mason-lspconfig.nvim",
-        opts = {},
+        opts = {ensure_installed = {"lua_ls", "ts_ls"}},
         dependencies = {{"mason-org/mason.nvim"}, "neovim/nvim-lspconfig"}
     }, {"b0o/schemastore.nvim", lazy = true}
 }
