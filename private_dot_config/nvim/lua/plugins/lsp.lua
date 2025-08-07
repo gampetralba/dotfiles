@@ -84,11 +84,6 @@ return {
                         'Highlight references')
                     map('n', '<space>k', vim.lsp.buf.clear_references,
                         'Clear references')
-
-                    -- Set up highlight groups for references
-                    vim.cmd [[ hi LspReferenceText ctermbg=8 guibg=#3c3836 ]]
-                    vim.cmd [[ hi LspReferenceWrite ctermbg=8 guibg=#3c3836 ]]
-                    vim.cmd [[ hi LspReferenceRead ctermbg=8 guibg=#3c3836 ]]
                 end
             })
 
