@@ -1,6 +1,9 @@
 -- Leader
 vim.g.mapleader = ","
 
+-- Emmet leader key (must be set before plugin loads)
+vim.g.user_emmet_leader_key = '<C-Z>'
+
 -- Visual wrapping
 vim.opt.linebreak = true
 vim.opt.breakindent = true
