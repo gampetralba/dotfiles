@@ -93,6 +93,14 @@ return {
             -- Set completion options
             vim.opt.completeopt = {"menu", "menuone", "noselect"}
 
+            vim.lsp.config('rust_analyzer', {
+                cmd = {'rust-analyzer'},
+                root_markers = {'Cargo.toml'},
+                capabilities = capabilities
+            })
+
+            vim.lsp.enable('rust_analyzer')
+
             -- Enhanced diagnostics configuration
             vim.diagnostic.config({
                 virtual_text = {prefix = "●", spacing = 4, source = "if_many"},
