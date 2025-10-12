@@ -4,6 +4,17 @@ vim.api.nvim_set_keymap("n", "<Leader>sv", ":source $MYVIMRC<CR>",
 -- Clipboard
 vim.keymap.set("v", "<C-c>", '"+y', {noremap = true, silent = true})
 
+-- Copy relative file path to clipboard
+vim.keymap.set("n", "<leader>cp", function()
+    local relative_path = vim.fn.expand("%:.")
+    if relative_path ~= "" then
+        vim.fn.setreg("+", relative_path)
+        vim.notify("Copied: " .. relative_path, vim.log.levels.INFO)
+    else
+        vim.notify("No file in current buffer", vim.log.levels.WARN)
+    end
+end, {noremap = true, silent = true, desc = "Copy relative file path"})
+
 -- Escape key
 vim.keymap.set("i", "jj", "<Esc>", {noremap = true, silent = true})
 
