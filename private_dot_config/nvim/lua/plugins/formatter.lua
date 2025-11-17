@@ -151,7 +151,7 @@ return {
                     rust = {
                         create_formatter_with_fallback({
                             exe = "rustfmt",
-                            args = {"--emit=stdout"},
+                            args = {"--edition 2021"},
                             stdin = true
                         }, nil, "rust")
                     },
