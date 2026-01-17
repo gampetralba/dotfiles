@@ -20,6 +20,24 @@ export BAT_THEME="Nord"
 alias vim="nvim"
 alias lg='lazygit'
 
+# tdev - start dev tmux session with fzf project picker
+function tdev {
+  local dir
+  dir=$(find ~/workspace -maxdepth 1 -type d | fzf --height 40% --reverse --prompt="Project: ")
+  [[ -z "$dir" ]] && return
+
+  local session_name=$(basename "$dir")
+  tmux new-session -d -s "$session_name" -c "$dir"
+  tmux split-window -h -t "$session_name" -p 40 -c "$dir"
+  tmux select-pane -t "$session_name":1.1
+
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t "$session_name"
+  else
+    tmux attach -t "$session_name"
+  fi
+}
+
 # Source private aliases if the file exists
 if [ -f ~/.zshrc_private_aliases ]; then
   source ~/.zshrc_private_aliases
