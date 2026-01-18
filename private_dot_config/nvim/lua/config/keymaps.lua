@@ -15,6 +15,22 @@ vim.keymap.set("n", "<leader>cp", function()
     end
 end, {noremap = true, silent = true, desc = "Copy relative file path"})
 
+-- Yank code with file path
+vim.keymap.set("v", "<leader>y", function()
+    local start_line = vim.fn.line("'<")
+    local end_line = vim.fn.line("'>")
+    local relative_path = vim.fn.expand("%:.")
+
+    vim.cmd('normal! "xy')
+    local code = vim.fn.getreg("x")
+
+    local content = string.format("%s:%d-%d\n```\n%s```", relative_path,
+                                  start_line, end_line, code)
+
+    vim.fn.setreg("+", content)
+    vim.notify("Yanked code with path", vim.log.levels.INFO)
+end, {noremap = true, silent = true, desc = "Yank code with file path"})
+
 -- Escape key
 vim.keymap.set("i", "jj", "<Esc>", {noremap = true, silent = true})
 
