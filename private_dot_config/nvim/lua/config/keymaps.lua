@@ -73,3 +73,21 @@ vim.keymap.set("n", "<leader>hv", ":vert help ", {noremap = true})
 -- Diagnostic
 vim.keymap.set("n", "<leader>dq", "<cmd>lua vim.diagnostic.setqflist()<CR>",
                {noremap = true})
+
+-- Read-only toggle (buffer)
+vim.keymap.set("n", "<leader>ro", function()
+    vim.bo.modifiable = not vim.bo.modifiable
+    vim.notify(vim.bo.modifiable and "Editable" or "Read-only")
+end, {noremap = true, silent = true, desc = "Toggle buffer read-only"})
+
+-- Read-only toggle (global)
+vim.keymap.set("n", "<leader>rO", function()
+    local lock = vim.g.global_readonly or false
+    vim.g.global_readonly = not lock
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_loaded(buf) then
+            vim.bo[buf].modifiable = lock
+        end
+    end
+    vim.notify(lock and "All buffers editable" or "All buffers read-only")
+end, {noremap = true, silent = true, desc = "Toggle global read-only"})

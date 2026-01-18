@@ -62,3 +62,13 @@ vim.api.nvim_create_autocmd("LspAttach", {
         end
     end,
 })
+
+-- Apply global readonly to new buffers
+vim.api.nvim_create_autocmd("BufEnter", {
+    group = vim.api.nvim_create_augroup("GlobalReadonly", {clear = true}),
+    callback = function()
+        if vim.g.global_readonly then
+            vim.bo.modifiable = false
+        end
+    end,
+})
