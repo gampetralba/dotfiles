@@ -27,12 +27,17 @@ yellow = "#EBCB8B"
 background = "#2E3440"
 foreground = "#D8DEE9"
 
+{{ if eq .chezmoi.os "linux" -}}
 [env]
 TERM = "xterm-256color"
 
+{{ end -}}
 [font]
+{{ if eq .chezmoi.os "darwin" -}}
+size = 17.0
+{{ else -}}
 size = 11.0
-
+{{ end }}
 [font.bold]
 family = "JetBrains Mono"
 style = "Bold"
