@@ -8,10 +8,10 @@ return {
             lint.linters_by_ft = {
                 rust = {"clippy"},
                 cpp = {"cppcheck"},
-                javascript = {"eslint"},
-                javascriptreact = {"eslint"},
-                typescript = {"eslint"},
-                typescriptreact = {"eslint"},
+                javascript = {"eslint_d"},
+                javascriptreact = {"eslint_d"},
+                typescript = {"eslint_d"},
+                typescriptreact = {"eslint_d"},
                 lua = {"luacheck"},
                 ruby = {"rubocop"},
                 css = {"stylelint"},
@@ -31,9 +31,8 @@ return {
         dependencies = {"mason.nvim", "mfussenegger/nvim-lint"},
         config = function()
             require("mason-nvim-lint").setup({
-                ensure_installed = {"eslint_d", "luacheck"},
                 automatic_installation = true,
-                quiet_mode = true
+                quiet_mode = true,
             })
         end
     }
