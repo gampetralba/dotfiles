@@ -4,7 +4,7 @@ return {
         build = 'make'
     }, {
         "nvim-telescope/telescope.nvim",
-        tag = '0.2.1',
+
         config = function()
             local actions = require("telescope.actions")
             local telescope = require("telescope")
