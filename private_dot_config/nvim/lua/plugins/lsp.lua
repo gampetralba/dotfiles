@@ -50,9 +50,6 @@ return {
                     map('n', 'gv',
                         '<cmd>lua require(\'lsp\').definition_vsplit()<CR>',
                         'Go to definition in vsplit')
-                    map('n', 'gi', vim.lsp.buf.implementation,
-                        'Go to implementation')
-                    map('n', 'gr', vim.lsp.buf.references, 'Find references')
 
                     -- Documentation
                     map('n', 'K', vim.lsp.buf.hover, 'Hover documentation')
