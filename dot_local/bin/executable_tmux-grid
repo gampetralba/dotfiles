@@ -1,0 +1,212 @@
+#!/usr/bin/env bash
+# tmux-grid - lay out the current tmux session as N windows with an equal pane grid
+#
+#   tmux-grid <n>   ensure the session has $WINDOWS windows and grow every window
+#                   to n panes (1, 2, 3, 4 or 6), then apply the grid layout
+#   tmux-grid       re-apply the grid layout to each window based on the pane
+#                   count it already has (use after manually killing panes)
+#
+# Grids are rows x columns: 2 -> 1x2, 3 -> 1x3, 4 -> 2x2, 6 -> 2x3.
+# Panes are never killed and never restarted - growing only adds panes.
+
+set -u
+
+WINDOWS=5
+
+usage() {
+    cat >&2 <<'USAGE'
+usage: tmux-grid [1|2|3|4|6]
+
+  1  1x1    2  1x2    3  1x3    4  2x2    6  2x3   (rows x columns)
+
+  with an argument: create windows up to 5 and grow each window to that many panes
+  without an argument: just re-apply the layout for each window's current pane count
+USAGE
+    exit 1
+}
+
+# rows and columns for a pane count, empty when there is no exact grid for it
+grid_dims() {
+    case "$1" in
+        2) echo "1 2" ;;
+        3) echo "1 3" ;;
+        4) echo "2 2" ;;
+        6) echo "2 3" ;;
+        *) echo "" ;;
+    esac
+}
+
+grid_name() {
+    local dims
+    dims="$(grid_dims "$1")"
+    if [ -n "$dims" ]; then
+        echo "${dims% *}x${dims#* }"
+    else
+        echo "$1 panes"
+    fi
+}
+
+# Build a tmux layout string for an exact rows x cols grid.
+# tmux's own "tiled" is not usable here: for 6 panes it produces 3x2, and for 3
+# panes a ragged 2x2. A layout string gives the exact geometry instead; tmux
+# assigns the window's panes to the cells in order, so contents are preserved.
+layout_string() {
+    local width="$1" height="$2" rows="$3" cols="$4"
+    awk -v W="$width" -v H="$height" -v rows="$rows" -v cols="$cols" '
+    function sizes(total, k, out,   avail, base, rem, i) {
+        avail = total - (k - 1)
+        base = int(avail / k)
+        rem = avail - base * k
+        for (i = 1; i <= k; i++)
+            out[i] = base + (i > k - rem ? 1 : 0)
+    }
+    function checksum(s,   c, i, n) {
+        c = 0
+        n = length(s)
+        for (i = 1; i <= n; i++) {
+            c = int(c / 2) + (c % 2) * 32768
+            c = (c + ord[substr(s, i, 1)]) % 65536
+        }
+        return sprintf("%04x", c)
+    }
+    BEGIN {
+        for (i = 0; i < 256; i++) ord[sprintf("%c", i)] = i
+        sizes(H, rows, rh)
+        sizes(W, cols, cw)
+
+        body = sprintf("%dx%d,0,0", W, H)
+        id = 0
+        y = 0
+
+        if (rows == 1) {
+            body = body "{"
+            x = 0
+            for (c = 1; c <= cols; c++) {
+                body = body sprintf("%s%dx%d,%d,0,%d", (c > 1 ? "," : ""), cw[c], H, x, ++id)
+                x += cw[c] + 1
+            }
+            body = body "}"
+        } else if (cols == 1) {
+            body = body "["
+            for (r = 1; r <= rows; r++) {
+                body = body sprintf("%s%dx%d,0,%d,%d", (r > 1 ? "," : ""), W, rh[r], y, ++id)
+                y += rh[r] + 1
+            }
+            body = body "]"
+        } else {
+            body = body "["
+            for (r = 1; r <= rows; r++) {
+                body = body sprintf("%s%dx%d,0,%d{", (r > 1 ? "," : ""), W, rh[r], y)
+                x = 0
+                for (c = 1; c <= cols; c++) {
+                    body = body sprintf("%s%dx%d,%d,%d,%d", (c > 1 ? "," : ""), cw[c], rh[r], x, y, ++id)
+                    x += cw[c] + 1
+                }
+                body = body "}"
+                y += rh[r] + 1
+            }
+            body = body "]"
+        }
+
+        print checksum(body) "," body
+    }'
+}
+
+apply_layout() {
+    local window="$1" count="$2" dims rows cols size layout
+
+    [ "$count" -lt 2 ] && return 0
+
+    dims="$(grid_dims "$count")"
+    if [ -n "$dims" ]; then
+        rows="${dims% *}"
+        cols="${dims#* }"
+        size="$(tmux display-message -p -t "$window" '#{window_width} #{window_height}')"
+        layout="$(layout_string "${size% *}" "${size#* }" "$rows" "$cols")"
+        tmux select-layout -t "$window" "$layout" >/dev/null 2>&1 && return 0
+    fi
+
+    # no exact grid for this count (or the window is too small for one)
+    if [ "$count" -le 3 ]; then
+        tmux select-layout -t "$window" even-horizontal >/dev/null
+    else
+        tmux select-layout -t "$window" tiled >/dev/null
+    fi
+}
+
+pane_count() {
+    tmux list-panes -t "$1" -F '#{pane_id}' | wc -l | tr -d ' '
+}
+
+# Largest pane (by area) in a window - splitting that one avoids "no space for new pane"
+largest_pane() {
+    tmux list-panes -t "$1" -F '#{pane_width} #{pane_height} #{pane_id}' \
+        | awk '{ a = $1 * $2; if (a > m) { m = a; id = $3 } } END { print id }'
+}
+
+[ -n "${TMUX:-}" ] || {
+    echo "tmux-grid: not inside a tmux session" >&2
+    exit 1
+}
+
+[ $# -le 1 ] || usage
+
+target="${1:-}"
+case "$target" in
+    "" | 1 | 2 | 3 | 4 | 6) ;;
+    *) usage ;;
+esac
+
+session="$(tmux display-message -p '#{session_name}')"
+start_dir="$(tmux display-message -p '#{pane_current_path}')"
+
+# Create missing windows (only when a target was given)
+if [ -n "$target" ]; then
+    while [ "$(tmux list-windows -t "$session" -F '#{window_id}' | wc -l | tr -d ' ')" -lt "$WINDOWS" ]; do
+        tmux new-window -d -t "$session:" -c "$start_dir"
+    done
+fi
+
+warned=0
+
+for window in $(tmux list-windows -t "$session" -F '#{window_id}'); do
+    have="$(pane_count "$window")"
+
+    if [ -n "$target" ] && [ "$have" -gt "$target" ]; then
+        name="$(tmux display-message -p -t "$window" '#{session_name}:#{window_index}')"
+        echo "tmux-grid: $name has $have panes (more than $target) - kill panes yourself, laying it out as $have" >&2
+        warned=1
+    fi
+
+    if [ -n "$target" ]; then
+        while [ "$have" -lt "$target" ]; do
+            pane="$(largest_pane "$window")"
+            size="$(tmux display-message -p -t "$pane" '#{pane_width} #{pane_height}')"
+
+            # split along the longer side; a cell is roughly twice as tall as wide
+            if [ "${size% *}" -gt $(( ${size#* } * 2 )) ]; then
+                direction="-h"
+            else
+                direction="-v"
+            fi
+
+            tmux split-window -d "$direction" -t "$pane" -c '#{pane_current_path}' || {
+                echo "tmux-grid: window too small to reach $target panes" >&2
+                exit 1
+            }
+            have=$((have + 1))
+        done
+    fi
+
+    apply_layout "$window" "$have"
+done
+
+windows="$(tmux list-windows -t "$session" -F '#{window_id}' | wc -l | tr -d ' ')"
+
+if [ -n "$target" ]; then
+    echo "tmux-grid: $windows windows x $target panes ($(grid_name "$target"))"
+else
+    echo "tmux-grid: re-laid out $windows windows"
+fi
+
+exit "$warned"
