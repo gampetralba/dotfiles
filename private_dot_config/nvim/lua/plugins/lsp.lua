@@ -5,6 +5,15 @@ return {
         config = function()
             local opts = {noremap = true, silent = true}
 
+            -- Neovim never rotates lsp.log, and it records every line a server
+            -- writes to stderr as an ERROR. A crashing rust-analyzer once looped
+            -- on a warning and grew this file to 85GB, so cap it at startup.
+            local logpath = vim.lsp.get_log_path()
+            local stat = vim.uv.fs_stat(logpath)
+            if stat and stat.size > 50 * 1024 * 1024 then
+                vim.fn.writefile({}, logpath)
+            end
+
             -- Global mappings
             vim.keymap.set('n', '<space>e', vim.diagnostic.open_float, opts)
             vim.keymap.set('n', '[g', function()
