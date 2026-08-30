@@ -35,6 +35,16 @@ bind c new-window -c "#{pane_current_path}"
 bind '"' split-window -c "#{pane_current_path}"
 bind % split-window -h -c "#{pane_current_path}"
 
+# tmux-grid pane layouts
+bind G display-menu -T " tmux-grid " -x C -y C \
+  "1 pane    1x1" 1 "run-shell 'tmux-grid 1'" \
+  "2 panes   1x2" 2 "run-shell 'tmux-grid 2'" \
+  "3 panes   1x3" 3 "run-shell 'tmux-grid 3'" \
+  "4 panes   2x2" 4 "run-shell 'tmux-grid 4'" \
+  "6 panes   2x3" 6 "run-shell 'tmux-grid 6'" \
+  "" \
+  "re-layout"     r "run-shell 'tmux-grid'"
+
 # Mouse
 set -g mouse on
 

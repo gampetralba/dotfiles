@@ -555,7 +555,12 @@ run_popup() { # width height args...
         fi
     fi
 
-    # no client to host a popup: run inline, zoomed for the room
+    # no client to host a popup: run inline, which needs a terminal to draw on
+    if ! stty size 2>/dev/null >/dev/null </dev/tty; then
+        echo "tmux-grid: no terminal for the picker - attach a client and retry" >&2
+        return 1
+    fi
+
     zoomed="$(tmux display-message -p -t "$CALLER" '#{window_zoomed_flag}')"
     [ "$zoomed" = 0 ] && tmux resize-pane -Z -t "$CALLER"
     "$SELF" "$@"
@@ -608,10 +613,17 @@ shrink_pass() {
 
 # --- main --------------------------------------------------------------------
 
+# The popup re-runs this script by path, so $0 has to become an absolute one.
+# Invoked as a bare name (from run-shell, or a keybinding) it has no directory at
+# all, and resolving it against $PWD would point at nothing.
 SELF="$0"
 case "$SELF" in
+    */*) ;;
+    *) SELF="$(command -v "$0" 2>/dev/null || echo "$0")" ;;
+esac
+case "$SELF" in
     /*) ;;
-    *) SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")" ;;
+    *) SELF="$(cd "$(dirname "$SELF")" && pwd)/$(basename "$SELF")" ;;
 esac
 
 if [ "${1:-}" = "--pick" ]; then
