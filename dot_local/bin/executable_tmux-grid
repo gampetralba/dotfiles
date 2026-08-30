@@ -5,6 +5,8 @@
 #                   n panes (1, 2, 3, 4 or 6), then apply the grid layout.
 #                   Windows with too few panes are split; windows with too many open
 #                   a picker so you can choose which panes to close.
+#                   In a session that is still one window with one pane, it first
+#                   asks which directory the whole grid should start in.
 #   tmux-grid       re-apply the grid layout to each window based on the pane
 #                   count it already has (use after manually killing panes)
 #
@@ -25,6 +27,9 @@ usage: tmux-grid [1|2|3|4|6]
   with an argument: create windows up to 5, then grow each window to that many panes,
     or - when a window has too many - open a picker to choose which idle panes to close
   without an argument: just re-apply the layout for each window's current pane count
+
+  in a fresh session (one window, one pane) you are asked which directory to start in,
+    listing $TMUX_GRID_ROOT (default ~/workspace)
 USAGE
     exit 1
 }
@@ -203,6 +208,8 @@ pick_restore() {
     STTY_SAVE=""
 }
 
+# Emits up/down/enter/esc/bs/quit, or c:<char> for any other key - the callers
+# decide what a letter means, because the directory picker types them into a filter.
 # bash 3.2 has no fractional read timeout, so tell the tty driver to return
 # after 0.1s instead: that is how a lone ESC is told from an arrow key.
 read_key() {
@@ -212,8 +219,11 @@ read_key() {
         return
     fi
     if [ "$k" = $'\033' ]; then
+        # bash's own read -n forces VMIN=1 and would block here, swallowing the
+        # next keypress; dd does a plain read() that honours min 0 / time 1, so a
+        # lone ESC comes back empty while an arrow still has its "[A" waiting.
         stty min 0 time 1 </dev/tty
-        IFS= read -rsn2 rest </dev/tty
+        rest="$(dd bs=1 count=2 2>/dev/null </dev/tty)"
         stty min 1 time 0 </dev/tty
         case "$rest" in
             '[A') printf up ;;
@@ -225,11 +235,8 @@ read_key() {
     fi
     case "$k" in
         '') printf enter ;;
-        ' ') printf space ;;
-        j) printf down ;;
-        k) printf up ;;
-        q) printf quit ;;
-        *) printf other ;;
+        $'\177' | $'\010') printf bs ;;
+        *) printf 'c:%s' "$k" ;;
     esac
 }
 
@@ -391,9 +398,9 @@ picker() { # infile outfile
         pick_render
         key="$(read_key)"
         case "$key" in
-            up) [ "$CUR" -gt 0 ] && CUR=$((CUR - 1)) ;;
-            down) [ "$CUR" -lt $((NNAV - 1)) ] && CUR=$((CUR + 1)) ;;
-            space)
+            up | 'c:k') [ "$CUR" -gt 0 ] && CUR=$((CUR - 1)) ;;
+            down | 'c:j') [ "$CUR" -lt $((NNAV - 1)) ] && CUR=$((CUR + 1)) ;;
+            'c: ')
                 idx="${NAV[$CUR]}"
                 if [ "${R_SEL[$idx]}" = 1 ]; then
                     R_SEL[$idx]=0
@@ -404,7 +411,7 @@ picker() { # infile outfile
                 fi
                 ;;
             enter) break ;;
-            quit | esc)
+            quit | esc | 'c:q')
                 CANCELLED=1
                 break
                 ;;
@@ -423,11 +430,118 @@ picker() { # infile outfile
     return 0
 }
 
+# --- the directory picker (internal --pickdir mode) --------------------------
+# Letters are typed into the filter here, so this one cancels on ESC, not q.
+
+# rebuilds FIDX - the indices of the entries matching FILTER
+dirpick_filter() {
+    local i
+    NF=0
+    for ((i = 0; i < ND; i++)); do
+        if [ -z "$FILTER" ]; then
+            FIDX[$NF]=$i
+            NF=$((NF + 1))
+        else
+            case "${D_LOW[$i]}" in
+                *"$FILTER"*)
+                    FIDX[$NF]=$i
+                    NF=$((NF + 1))
+                    ;;
+            esac
+        fi
+    done
+    [ "$DCUR" -ge "$NF" ] && DCUR=$((NF - 1))
+    [ "$DCUR" -lt 0 ] && DCUR=0
+}
+
+dirpick_render() {
+    local i out avail top
+    avail=$((ROWS - 5))
+    [ "$avail" -lt 3 ] && avail=3
+    top=0
+    [ "$DCUR" -ge "$avail" ] && top=$((DCUR - avail + 1))
+
+    out=$'\033[H\033[2J'
+    out="$out  select a directory    type to filter · enter confirm · esc cancel"$'\n'
+    out="$out  filter: $FILTER"$'\n\n'
+    if [ "$NF" = 0 ]; then
+        out="$out  no match"$'\n'
+    else
+        for ((i = top; i < NF && i < top + avail; i++)); do
+            if [ "$i" = "$DCUR" ]; then
+                out="$out"$' > \033[1m'"${D_NAME[${FIDX[$i]}]}"$'\033[0m\n'
+            else
+                out="$out   ${D_NAME[${FIDX[$i]}]}"$'\n'
+            fi
+        done
+    fi
+    out="$out"$'\n'"  $NF of $ND"
+    printf '%s' "$out" >/dev/tty
+}
+
+dirpicker() { # outfile
+    local out="$1" d size key root
+
+    root="${TMUX_GRID_ROOT:-$HOME/workspace}"
+    [ -d "$root" ] || return 1
+
+    ND=0
+    while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        D_PATH[$ND]="$d"
+        D_NAME[$ND]="${d##*/}"
+        D_LOW[$ND]="$(printf '%s' "${d##*/}" | tr '[:upper:]' '[:lower:]')"
+        ND=$((ND + 1))
+    done < <(find "$root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    [ "$ND" -gt 0 ] || return 1
+
+    size="$(stty size </dev/tty 2>/dev/null)" || size="24 80"
+    ROWS="${size% *}"
+    FILTER=""
+    DCUR=0
+    DCANCEL=0
+    dirpick_filter
+
+    trap 'pick_restore' EXIT INT TERM
+    pick_setup
+
+    while :; do
+        dirpick_render
+        key="$(read_key)"
+        case "$key" in
+            up) [ "$DCUR" -gt 0 ] && DCUR=$((DCUR - 1)) ;;
+            down) [ "$DCUR" -lt $((NF - 1)) ] && DCUR=$((DCUR + 1)) ;;
+            enter) [ "$NF" -gt 0 ] && break ;;
+            esc | quit)
+                DCANCEL=1
+                break
+                ;;
+            bs)
+                FILTER="${FILTER%?}"
+                dirpick_filter
+                ;;
+            c:*)
+                FILTER="$FILTER$(printf '%s' "${key#c:}" | tr '[:upper:]' '[:lower:]')"
+                dirpick_filter
+                ;;
+        esac
+    done
+
+    pick_restore
+    trap - EXIT INT TERM
+
+    [ "$DCANCEL" = 1 ] && return 1
+    printf '%s\n' "${D_PATH[${FIDX[$DCUR]}]}" >"$out"
+    return 0
+}
+
 # --- shrink pass -------------------------------------------------------------
 
-# Runs the picker, preferring a popup over the grid so the layout is undisturbed.
-run_picker() { # infile outfile
-    local zoomed clients
+# Runs one of the internal picker modes, preferring a popup over the grid so the
+# layout is undisturbed.
+run_popup() { # width height args...
+    local w="$1" h="$2" zoomed clients cmd
+    shift 2
 
     # Only pop up when a client is actually watching this session. With none,
     # tmux hands the popup to whatever other client is attached to the server -
@@ -435,8 +549,8 @@ run_picker() { # infile outfile
     clients="$(tmux list-clients -t "$SESSION" -F '#{client_tty}' 2>/dev/null | wc -l | tr -d ' ')"
 
     if [ -z "${TMUX_GRID_NO_POPUP:-}" ] && [ "$clients" -gt 0 ]; then
-        if tmux display-popup -E -w 80% -h 85% \
-            "$SELF --pick $(printf %q "$1") $(printf %q "$2")" 2>/dev/null; then
+        cmd="$(printf '%q ' "$SELF" "$@")"
+        if tmux display-popup -E -w "$w" -h "$h" "$cmd" 2>/dev/null; then
             return 0
         fi
     fi
@@ -444,7 +558,7 @@ run_picker() { # infile outfile
     # no client to host a popup: run inline, zoomed for the room
     zoomed="$(tmux display-message -p -t "$CALLER" '#{window_zoomed_flag}')"
     [ "$zoomed" = 0 ] && tmux resize-pane -Z -t "$CALLER"
-    "$SELF" --pick "$1" "$2"
+    "$SELF" "$@"
     [ "$zoomed" = 0 ] && tmux resize-pane -Z -t "$CALLER"
     return 0
 }
@@ -483,7 +597,7 @@ shrink_pass() {
     if [ "$over" = 1 ] && [ "$idle" = 0 ]; then
         echo "tmux-grid: every extra pane is busy - nothing can be closed" >&2
     elif [ "$over" = 1 ]; then
-        run_picker "$infile" "$outfile"
+        run_popup 80% 85% --pick "$infile" "$outfile"
         while read -r pid; do
             [ -n "$pid" ] && tmux kill-pane -t "$pid" 2>/dev/null
         done <"$outfile"
@@ -505,6 +619,11 @@ if [ "${1:-}" = "--pick" ]; then
     exit $?
 fi
 
+if [ "${1:-}" = "--pickdir" ]; then
+    dirpicker "${2:-}"
+    exit $?
+fi
+
 [ -n "${TMUX:-}" ] || {
     echo "tmux-grid: not inside a tmux session" >&2
     exit 1
@@ -521,6 +640,28 @@ esac
 SESSION="$(tmux display-message -p '#{session_name}')"
 CALLER="$(tmux display-message -p '#{pane_id}')"
 START_DIR="$(tmux display-message -p '#{pane_current_path}')"
+SPLIT_DIR=""
+CHOSEN_DIR=""
+
+# A session that is still one window with one pane has no working directory worth
+# inheriting, so ask where this grid should live before building it.
+if [ -n "$TARGET" ] \
+    && [ "$(tmux list-windows -t "$SESSION" -F '#{window_id}' | wc -l | tr -d ' ')" = 1 ] \
+    && [ "$(pane_count "$SESSION:")" = 1 ]; then
+    dirfile="$(mktemp -t tmux-grid-dir)" && : >"$dirfile"
+    run_popup 60% 50% --pickdir "$dirfile"
+    CHOSEN_DIR="$(head -1 "$dirfile" 2>/dev/null)"
+    rm -f "$dirfile"
+    if [ -n "$CHOSEN_DIR" ]; then
+        START_DIR="$CHOSEN_DIR"
+        SPLIT_DIR="$CHOSEN_DIR"
+        echo "tmux-grid: starting in $CHOSEN_DIR"
+    fi
+fi
+
+# new panes follow their source pane, unless a directory was just chosen
+SPLIT_C='#{pane_current_path}'
+[ -n "$SPLIT_DIR" ] && SPLIT_C="$SPLIT_DIR"
 
 # Create missing windows (only when a target was given)
 if [ -n "$TARGET" ]; then
@@ -553,7 +694,7 @@ for window in $(tmux list-windows -t "$SESSION" -F '#{window_id}'); do
                 direction="-v"
             fi
 
-            tmux split-window -d "$direction" -t "$pane" -c '#{pane_current_path}' || {
+            tmux split-window -d "$direction" -t "$pane" -c "$SPLIT_C" || {
                 echo "tmux-grid: window too small to reach $TARGET panes" >&2
                 exit 1
             }
@@ -572,6 +713,11 @@ elif [ -n "$TARGET" ]; then
     echo "tmux-grid: $windows windows x $TARGET panes ($(grid_name "$TARGET"))"
 else
     echo "tmux-grid: re-laid out $windows windows"
+fi
+
+# queued in the tty: the shell runs it as soon as this script exits
+if [ -n "$CHOSEN_DIR" ]; then
+    tmux send-keys -t "$CALLER" "cd $(printf %q "$CHOSEN_DIR")" Enter
 fi
 
 exit "$warned"
