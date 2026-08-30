@@ -183,6 +183,24 @@ short_path() {
     echo "${1/#$HOME/~}"
 }
 
+# Progress goes to stdout when a terminal is reading it. Launched from the key
+# binding there is none: run-shell collects stdout and drops the pane into a view
+# you have to press q to leave, so use the status line instead. Lines are gathered
+# and shown as one message, since a second display-message would erase the first.
+NOTES=""
+note() {
+    if [ -t 1 ]; then
+        echo "$1"
+    else
+        NOTES="${NOTES:+$NOTES - }$1"
+    fi
+}
+
+flush_notes() {
+    [ -n "$NOTES" ] && tmux display-message "$NOTES"
+    NOTES=""
+}
+
 # sets TRUNC - a function rather than $(...) so a redraw forks nothing
 trunc() { # text width
     if [ "${#1}" -gt "$2" ]; then
@@ -667,7 +685,7 @@ if [ -n "$TARGET" ] \
     if [ -n "$CHOSEN_DIR" ]; then
         START_DIR="$CHOSEN_DIR"
         SPLIT_DIR="$CHOSEN_DIR"
-        echo "tmux-grid: starting in $CHOSEN_DIR"
+        note "tmux-grid: starting in $CHOSEN_DIR"
     fi
 fi
 
@@ -720,12 +738,14 @@ done
 windows="$(tmux list-windows -t "$SESSION" -F '#{window_id}' | wc -l | tr -d ' ')"
 
 if [ -n "$TARGET" ] && [ "$warned" = 1 ]; then
-    echo "tmux-grid: $windows windows, target of $TARGET panes not reached everywhere"
+    note "tmux-grid: $windows windows, target of $TARGET panes not reached everywhere"
 elif [ -n "$TARGET" ]; then
-    echo "tmux-grid: $windows windows x $TARGET panes ($(grid_name "$TARGET"))"
+    note "tmux-grid: $windows windows x $TARGET panes ($(grid_name "$TARGET"))"
 else
-    echo "tmux-grid: re-laid out $windows windows"
+    note "tmux-grid: re-laid out $windows windows"
 fi
+
+flush_notes
 
 # queued in the tty: the shell runs it as soon as this script exits
 if [ -n "$CHOSEN_DIR" ]; then
