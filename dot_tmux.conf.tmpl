@@ -45,6 +45,9 @@ bind G display-menu -T " tmux-grid " -x C -y C \
   "" \
   "re-layout"     r "run-shell 'tmux-grid'"
 
+# Point the code window's panes at the worktrees the claude window is working in
+bind W run-shell 'tmux-worktree-sync'
+
 # Mouse
 set -g mouse on
 

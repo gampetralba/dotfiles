@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# tmux-worktree-sync - point the code window's panes at the worktrees the claude
+# window is working in, pane for pane.
+#
+# Pane N of the code window follows pane N of the claude window. Pane indexes
+# match visual reading order (left to right, top to bottom) after tmux-grid lays
+# a window out, so "pane 4" means the same cell in both windows.
+#
+# The directories come from /tmp/claude-worktree, written per pane by
+# claude-statusline: a claude process keeps its cwd at the project root even
+# inside a worktree, so nothing outside the session can work this out.
+
+set -u
+
+STATE_DIR="/tmp/claude-worktree"
+SRC_WINDOW=1
+DST_WINDOW=2
+
+# From a key binding there is no terminal reading stdout, and run-shell would
+# turn any output into a view you have to press q to leave.
+NOTES=""
+note() {
+    if [ -t 1 ]; then
+        echo "$1"
+    else
+        NOTES="${NOTES:+$NOTES - }$1"
+    fi
+}
+
+flush_notes() {
+    [ -n "$NOTES" ] && tmux display-message "$NOTES"
+    NOTES=""
+}
+
+[ -n "${TMUX:-}" ] || {
+    echo "tmux-worktree-sync: not inside a tmux session" >&2
+    exit 1
+}
+
+SESSION="$(tmux display-message -p '#{session_name}')"
+
+tmux list-panes -t "$SESSION:$DST_WINDOW" -F '#{pane_id}' >/dev/null 2>&1 || {
+    note "tmux-worktree-sync: no window $DST_WINDOW to sync"
+    flush_notes
+    exit 1
+}
+
+# records outlive their session; drop the ones whose pane is gone
+if [ -d "$STATE_DIR" ]; then
+    for f in "$STATE_DIR"/%*; do
+        [ -f "$f" ] || continue
+        tmux display-message -p -t "$(basename "$f")" '#{pane_id}' >/dev/null 2>&1 || rm -f "$f"
+    done
+fi
+
+synced=0
+skipped=0
+missing=0
+
+while read -r idx src_pane; do
+    rec="$STATE_DIR/$src_pane"
+    [ -f "$rec" ] || {
+        missing=$((missing + 1))
+        continue
+    }
+    dir="$(head -1 "$rec")"
+    [ -n "$dir" ] && [ -d "$dir" ] || {
+        missing=$((missing + 1))
+        continue
+    }
+
+    dst="$(tmux list-panes -t "$SESSION:$DST_WINDOW" \
+        -F '#{pane_index} #{pane_id} #{pane_current_command}' 2>/dev/null \
+        | awk -v i="$idx" '$1 == i { print $2, $3 }')"
+    [ -n "$dst" ] || continue
+
+    dst_pane="${dst%% *}"
+    dst_cmd="${dst##* }"
+
+    case "$dst_cmd" in
+        zsh | bash | sh | fish | ksh | dash | tcsh | csh)
+            tmux send-keys -t "$dst_pane" "cd $(printf %q "$dir")" Enter
+            synced=$((synced + 1))
+            ;;
+        nvim | vim)
+            # leave whatever mode the editor is in before typing a command
+            tmux send-keys -t "$dst_pane" Escape
+            tmux send-keys -t "$dst_pane" ":cd ${dir// /\\ }" Enter
+            synced=$((synced + 1))
+            ;;
+        *)
+            skipped=$((skipped + 1))
+            ;;
+    esac
+done < <(tmux list-panes -t "$SESSION:$SRC_WINDOW" -F '#{pane_index} #{pane_id}')
+
+msg="tmux-worktree-sync: $synced pane(s) moved"
+[ "$skipped" -gt 0 ] && msg="$msg, $skipped busy"
+[ "$missing" -gt 0 ] && msg="$msg, $missing with no worktree recorded"
+note "$msg"
+flush_notes
+
+exit 0
